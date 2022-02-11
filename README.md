@@ -4,7 +4,7 @@ This tool can works with for some new engines.
 
 ## How to use
 
-The tool reads a json-based config file when it starts up. That config file should have the same name as the dll.  
+The tool reads a json-based config file when it starts up. That config file should have the same name as the dll. e.g `KrkrDump.json`
 
 Here is an example of a valid config file:
 
@@ -37,3 +37,7 @@ Here is an example of a valid config file:
 `includeExtensions`,`excludeExtensions`: Filter the file type that you want to extract. Exclusive.
 
 `decryptSimpleCrypt`: Try to decrypt the text file encrypted with `SimpleCrypt`.
+
+## How to start
+
+If your config file is ready, put `KrkrDump.dll` and `KrkrDump.json` and `KrkrDumpLoader.exe` in the same folder, then drag `Game.exe` to `KrkrDumpLoader.exe`
