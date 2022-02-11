@@ -1,0 +1,9 @@
+[submodule "Detours"]
+	path = Detours
+	url = https://github.com/microsoft/Detours
+[submodule "cJSON"]
+	path = cJSON
+	url = https://github.com/DaveGamble/cJSON
+[submodule "zlib"]
+	path = zlib
+	url = https://github.com/madler/zlib.git
