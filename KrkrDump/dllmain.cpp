@@ -415,18 +415,22 @@ void LoadConfiguration()
 			{
 				g_outputPath = Encoding::AnsiToUnicode(value, Encoding::UTF_8);
 
-				if (g_outputPath.empty())
+				if (!g_outputPath.empty())
+				{
+					FixPath(g_outputPath);
+
+					if (g_outputPath.back() != L'\\')
+					{
+						g_outputPath += L'\\';
+					}
+
+					g_logger.WriteLine(L"Output Directory Path = \"%s\"", g_outputPath.c_str());
+				}
+				else
 				{
 					g_enableExtract = false;
 
 					g_logger.WriteLine(L"No output directory set, extraction disabled.");
-				}
-
-				FixPath(g_outputPath);
-
-				if (g_outputPath.back() != L'\\')
-				{
-					g_outputPath += L'\\';
 				}
 			}
 		}
