@@ -10,6 +10,7 @@
 #include "detours.h"
 #include "tp_stub.h"
 #include "cJSON.h"
+#include "zlib.h"
 #include <regex>
 #include <vector>
 #include <shlobj.h>
@@ -177,6 +178,8 @@ static std::vector<std::wstring> g_regexRules;
 static std::vector<std::wstring> g_includeExtensions;
 static std::vector<std::wstring> g_excludeExtensions;
 
+static bool g_decryptSimpleCrypt;
+
 
 std::wstring MatchPath(const std::wstring& path)
 {
@@ -263,6 +266,150 @@ void FixPath(std::wstring& path)
 }
 
 
+bool TryDecryptText(tTJSBinaryStream* stream, std::vector<uint8_t>& output)
+{
+	try
+	{
+		uint8_t mark[2];
+
+		memset(mark, 0, sizeof(mark));
+		stream->Read(mark, 2);
+
+		if (mark[0] == 0xfe && mark[1] == 0xfe)
+		{
+			uint8_t mode;
+
+			stream->Read(&mode, 1);
+
+			if (mode != 0 && mode != 1 && mode != 2)
+			{
+				return false;
+			}
+
+			memset(mark, 0, sizeof(mark));
+			stream->Read(mark, 2);
+
+			if (mark[0] != 0xff || mark[1] != 0xfe)
+			{
+				return false;
+			}
+
+			if (mode == 2)
+			{
+				tjs_int64 compressed = 0;
+				tjs_int64 uncompressed = 0;
+
+				stream->Read(&compressed, sizeof(tjs_int64));
+				stream->Read(&uncompressed, sizeof(tjs_int64));
+
+				if (compressed <= 0 || compressed >= INT_MAX || uncompressed <= 0 || uncompressed >= INT_MAX)
+				{
+					return false;
+				}
+
+				std::vector<uint8_t> data((size_t)compressed);
+
+				if (stream->Read(data.data(), (tjs_uint)compressed) != compressed)
+				{
+					return false;
+				}
+
+				size_t count = (size_t)uncompressed;
+
+				std::vector<uint8_t> buffer(count + 2);
+
+				buffer[0] = mark[0];
+				buffer[1] = mark[1];
+
+				Bytef* dest = buffer.data() + 2;
+				uLongf destLen = (uLongf)uncompressed;
+
+				int result = Z_OK;
+
+				try
+				{
+					result = uncompress(dest, &destLen, data.data(), (uLong)compressed);
+				}
+				catch (...)
+				{
+					return false;
+				}
+
+				if (result != Z_OK || destLen != (uLongf)uncompressed)
+				{
+					return false;
+				}
+
+				output = std::move(buffer);
+
+				return true;
+			}
+			else
+			{
+				tjs_int64 startpos = (tjs_int64)stream->Seek(0, TJS_BS_SEEK_CUR);
+				tjs_int64 endpos = (tjs_int64)stream->Seek(0, TJS_BS_SEEK_END);
+
+				stream->Seek(startpos, TJS_BS_SEEK_SET);
+
+				tjs_int64 size = endpos - startpos;
+
+				if (size <= 0 || size >= INT_MAX)
+				{
+					return false;
+				}
+
+				size_t count = (size_t)(size / sizeof(tjs_char));
+
+				if (count == 0)
+				{
+					return false;
+				}
+
+				std::vector<tjs_char> buffer(count);
+
+				tjs_uint sizeToRead = (tjs_uint)size;
+
+				stream->Read(buffer.data(), sizeToRead);
+
+				if (mode == 0)
+				{
+					for (size_t i = 0; i < count; i++)
+					{
+						tjs_char ch = buffer[i];
+						if (ch >= 0x20) buffer[i] = ch ^ (((ch & 0xfe) << 8) ^ 1);
+					}
+				}
+				else if (mode == 1)
+				{
+					for (size_t i = 0; i < count; i++)
+					{
+						tjs_char ch = buffer[i];
+						ch = ((ch & 0xaaaaaaaa) >> 1) | ((ch & 0x55555555) << 1);
+						buffer[i] = ch;
+					}
+				}
+
+				size_t sizeToCopy = count * sizeof(tjs_char);
+
+				output.resize(sizeToCopy + 2);
+
+				output[0] = mark[0];
+				output[1] = mark[1];
+
+				memcpy(output.data() + 2, buffer.data(), sizeToCopy);
+
+				return true;
+			}
+		}
+	}
+	catch (...)
+	{
+	}
+
+	return false;
+}
+
+
 tjs_uint64 TJSBinaryStream_GetLength(tTJSBinaryStream* stream)
 {
 	tjs_uint64 size;
@@ -300,14 +447,30 @@ void ExtractFile(tTJSBinaryStream* stream, std::wstring& extractPath)
 
 	if (size > 0)
 	{
-		std::vector<uint8_t> buffer(size);
+		std::vector<uint8_t> buffer;
 
-		if (stream->Read(buffer.data(), size) == size)
+		bool success = false;
+
+		if (g_decryptSimpleCrypt && TryDecryptText(stream, buffer))
+		{
+			success = true;
+		}
+		else
+		{
+			buffer.resize(size);
+
+			if (stream->Read(buffer.data(), size) == size)
+			{
+				success = true;
+			}
+		}
+
+		if (success && !buffer.empty())
 		{
 			if (g_logLevel > 0)
 				g_logger.WriteLine(L"Extract \"%s\"", extractPath.c_str());
 
-			if (File::WriteAllBytes(outputPath, buffer.data(), size) == false)
+			if (File::WriteAllBytes(outputPath, buffer.data(), buffer.size()) == false)
 			{
 				g_logger.WriteLine(L"Failed to write \"%s\"", outputPath.c_str());
 			}
@@ -383,6 +546,7 @@ void LoadConfiguration()
 	g_regexRules.clear();
 	g_includeExtensions.clear();
 	g_excludeExtensions.clear();
+	g_decryptSimpleCrypt = false;
 
 	std::wstring jsonPath = Path::ChangeExtension(g_dllPath, L"json");
 	std::string json = File::ReadAllText(jsonPath);
@@ -529,6 +693,13 @@ void LoadConfiguration()
 					}
 				}
 			}
+		}
+
+		cJSON* jDecrypt = cJSON_GetObjectItem(jRoot, "decryptSimpleCrypt");
+
+		if (jDecrypt)
+		{
+			g_decryptSimpleCrypt = cJSON_IsTrue(jDecrypt);
 		}
 
 		cJSON_Delete(jRoot);
