@@ -8,12 +8,16 @@
 #include "file.h"
 #include "encoding.h"
 #include "detours.h"
-#include "tp_stub.h"
 #include "cJSON.h"
 #include "zlib.h"
 #include <regex>
 #include <vector>
 #include <shlobj.h>
+
+#pragma warning ( push )
+#pragma warning ( disable : 4100 4201 4457 )
+#include "tp_stub.h"
+#pragma warning ( pop )
 
 
 static HMODULE g_hEXE;
