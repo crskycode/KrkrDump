@@ -2,3 +2,6 @@
 	url = https://github.com/microsoft/Detours
 [submodule "cJSON"]
 	url = https://github.com/DaveGamble/cJSON
+[submodule "zlib"]
+	path = zlib
+	url = https://github.com/madler/zlib.git
