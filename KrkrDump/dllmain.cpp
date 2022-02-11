@@ -463,6 +463,8 @@ void ExtractFile(tTJSBinaryStream* stream, std::wstring& extractPath)
 		{
 			buffer.resize(size);
 
+			stream->Seek(0, TJS_BS_SEEK_SET);
+
 			if (stream->Read(buffer.data(), size) == size)
 			{
 				success = true;
@@ -480,7 +482,6 @@ void ExtractFile(tTJSBinaryStream* stream, std::wstring& extractPath)
 			}
 		}
 
-		// Back to head
 		stream->Seek(0, TJS_BS_SEEK_SET);
 	}
 	else
