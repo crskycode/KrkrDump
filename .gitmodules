@@ -1,0 +1,4 @@
+[submodule "Detours"]
+	url = https://github.com/microsoft/Detours
+[submodule "cJSON"]
+	url = https://github.com/DaveGamble/cJSON
