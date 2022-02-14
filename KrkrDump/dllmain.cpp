@@ -50,7 +50,6 @@ void UnInlineHook(T& OriginalFunction, T DetourFunction)
 	DetourTransactionCommit();
 }
 
-#define FIND_EXPORTER
 #ifdef FIND_EXPORTER
 
 
