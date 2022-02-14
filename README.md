@@ -14,7 +14,7 @@ Here is an example of a valid config file:
     "enableExtract": true,
     "outputDirectory": "E:\\games\\game\\dump",
     "rules": [
-        "file://\\./.+?\\.xp3>(.+?\\..+)",
+        "file://\\./.+?\\.xp3>(.+?\\..+$)",
         "archive://./(.+)",
         "arc://./(.+)",
         "bres://./(.+)"
