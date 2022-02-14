@@ -77,6 +77,10 @@ HRESULT _stdcall HookV2Link(iTVPFunctionExporter* exporter)
 		TVPInitImportStub(exporter);
 
 		g_logger.WriteLine(L"Stub initialized");
+
+		PVOID pfnTVPCreateIStream = TVPGetImportFuncPtr("IStream * ::TVPCreateIStream(const ttstr &,tjs_uint32)");
+
+		g_logger.WriteLine(L"Caught TVPCreateIStream(%p)", pfnTVPCreateIStream);
 	}
 	catch (const std::exception& e)
 	{
@@ -722,6 +726,9 @@ void InstallHooks()
 	PVOID base = PE::GetModuleBase(g_hEXE);
 	DWORD size = PE::GetModuleSize(g_hEXE);
 
+	g_logger.WriteLine(L"Image Base = %p", base);
+	g_logger.WriteLine(L"Image Base = %X", size);
+
 	PVOID pfnTVPCreateStream = PE::SearchPattern(base, size, TVPCREATESTREAM_SIG, TVPCREATESTREAM_SIG_LEN);
 
 	if (pfnTVPCreateStream)
@@ -731,7 +738,9 @@ void InstallHooks()
 		InlineHook(pfnKrkrzMsvcFastCallTVPCreateStreamProc, KrkrzMsvcFastCallTVPCreateStream);
 	}
 
-	// InlineHook(pfnGetProcAddress, HookGetProcAddress);
+#ifdef FIND_EXPORTER
+	InlineHook(pfnGetProcAddress, HookGetProcAddress);
+#endif
 }
 
 
