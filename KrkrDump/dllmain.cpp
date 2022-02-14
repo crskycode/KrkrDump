@@ -50,7 +50,7 @@ void UnInlineHook(T& OriginalFunction, T DetourFunction)
 	DetourTransactionCommit();
 }
 
-
+#define FIND_EXPORTER
 #ifdef FIND_EXPORTER
 
 
@@ -495,22 +495,8 @@ void ExtractFile(tTJSBinaryStream* stream, std::wstring& extractPath)
 }
 
 
-// 
-// Version : KRKRZ (MSVC)
-// 
-#define TVPCREATESTREAM_SIG "\x55\x8B\xEC\x6A\xFF\x68\x2A\x2A\x2A\x2A\x64\xA1\x2A\x2A\x2A\x2A\x50\x83\xEC\x5C\x53\x56\x57\xA1\x2A\x2A\x2A\x2A\x33\xC5\x50\x8D\x45\xF4\x64\xA3\x2A\x2A\x2A\x2A\x89\x65\xF0\x89\x4D\xEC\xC7\x45\x2A\x2A\x2A\x2A\x2A\xE8\x2A\x2A\x2A\x2A\x8B\x4D\xF4\x64\x89\x0D\x2A\x2A\x2A\x2A\x59\x5F\x5E\x5B\x8B\xE5\x5D\xC3"
-#define TVPCREATESTREAM_SIG_LEN ( sizeof(TVPCREATESTREAM_SIG) - 1 )
-// Prototype
-typedef tTJSBinaryStream* (_fastcall* tKrkrzMsvcFastCallTVPCreateStreamProc)(ttstr*, tjs_uint32);
-
-
-// Original
-tKrkrzMsvcFastCallTVPCreateStreamProc pfnKrkrzMsvcFastCallTVPCreateStreamProc;
-// Hooked
-tTJSBinaryStream* _fastcall KrkrzMsvcFastCallTVPCreateStream(ttstr* name, tjs_uint32 flags)
+void ProcessStream(tTJSBinaryStream* stream, ttstr* name, tjs_uint32 flags)
 {
-	tTJSBinaryStream* stream = pfnKrkrzMsvcFastCallTVPCreateStreamProc(name, flags);
-
 	if (stream && flags == TJS_BS_READ)
 	{
 		try
@@ -542,8 +528,69 @@ tTJSBinaryStream* _fastcall KrkrzMsvcFastCallTVPCreateStream(ttstr* name, tjs_ui
 			g_logger.WriteLineAnsi(CP_ACP, "Exception : %s", e.what());
 		}
 	}
+}
 
+
+// 
+// Version : KRKRZ (MSVC)
+// 
+#define TVPCREATESTREAM_SIG "\x55\x8B\xEC\x6A\xFF\x68\x2A\x2A\x2A\x2A\x64\xA1\x2A\x2A\x2A\x2A\x50\x83\xEC\x5C\x53\x56\x57\xA1\x2A\x2A\x2A\x2A\x33\xC5\x50\x8D\x45\xF4\x64\xA3\x2A\x2A\x2A\x2A\x89\x65\xF0\x89\x4D\xEC\xC7\x45\x2A\x2A\x2A\x2A\x2A\xE8\x2A\x2A\x2A\x2A\x8B\x4D\xF4\x64\x89\x0D\x2A\x2A\x2A\x2A\x59\x5F\x5E\x5B\x8B\xE5\x5D\xC3"
+#define TVPCREATESTREAM_SIG_LEN ( sizeof(TVPCREATESTREAM_SIG) - 1 )
+// Prototype
+typedef tTJSBinaryStream* (_fastcall* tKrkrzMsvcFastCallTVPCreateStreamProc)(ttstr*, tjs_uint32);
+
+
+//
+// Version : KRKR2 (BCB)
+//
+#define KR2_TVPCREATESTREAM_SIG "\x55\x8B\xEC\x81\xC4\x2A\x2A\x2A\x2A\x53\x56\x57\x89\x95\x2A\x2A\x2A\x2A\x89\x85\x2A\x2A\x2A\x2A\xB8\x2A\x2A\x2A\x2A\xC7\x85\x2A\x2A\x2A\x2A\x2A\x2A\x2A\x2A\x89\x65\x80\x89\x85\x2A\x2A\x2A\x2A\x66\xC7\x45\x2A\x2A\x2A\x33\xD2\x89\x55\x90\x64\x8B\x0D\x2A\x2A\x2A\x2A\x89\x8D\x2A\x2A\x2A\x2A\x8D\x85\x2A\x2A\x2A\x2A\x64\xA3\x2A\x2A\x2A\x2A\x66\xC7\x45\x2A\x2A\x2A\x8B\x95\x2A\x2A\x2A\x2A\x8B\x85\x2A\x2A\x2A\x2A\xE8\x2A\x2A\x2A\x2A\x8B\x95\x2A\x2A\x2A\x2A\x64\x89\x15\x2A\x2A\x2A\x2A\xE9\x2A\x2A\x2A\x2A\x6A\x23\x8B\x8D\x2A\x2A\x2A\x2A\x83\x39\x00\x74\x20\x8B\x85\x2A\x2A\x2A\x2A\x8B\x00\x85\xC0\x75\x04\x33\xD2"
+#define KR2_TVPCREATESTREAM_SIG_LEN ( sizeof(KR2_TVPCREATESTREAM_SIG) - 1 )
+
+
+// Original
+tKrkrzMsvcFastCallTVPCreateStreamProc pfnKrkrzMsvcFastCallTVPCreateStreamProc;
+// Hooked
+tTJSBinaryStream* _fastcall KrkrzMsvcFastCallTVPCreateStream(ttstr* name, tjs_uint32 flags)
+{
+	tTJSBinaryStream* stream = pfnKrkrzMsvcFastCallTVPCreateStreamProc(name, flags);
+	ProcessStream(stream, name, flags);
 	return stream;
+}
+
+
+// Original
+PVOID pfnKrkr2BcbFastCallTVPCreateStreamProc;
+// Callback
+_declspec(naked)
+tTJSBinaryStream* Krkr2BcbFastCallTVPCreateStreamCallback(ttstr* name, tjs_uint32 flags)
+{
+	_asm
+	{
+		mov	edx, flags
+		mov eax, name
+		call pfnKrkr2BcbFastCallTVPCreateStreamProc
+		ret
+	}
+}
+// Hooked
+tTJSBinaryStream* Krkr2BcbFastCallTVPCreateStream(ttstr* name, tjs_uint32 flags)
+{
+	tTJSBinaryStream* stream = Krkr2BcbFastCallTVPCreateStreamCallback(name, flags);
+	ProcessStream(stream, name, flags);
+	return stream;
+}
+// Detour
+_declspec(naked)
+void Krkr2BcbFastCallTVPCreateStreamDetour()
+{
+	_asm
+	{
+		push edx
+		push eax
+		call Krkr2BcbFastCallTVPCreateStream
+		add esp, 8
+		ret
+	}
 }
 
 
@@ -736,6 +783,24 @@ void InstallHooks()
 		pfnKrkrzMsvcFastCallTVPCreateStreamProc = (tKrkrzMsvcFastCallTVPCreateStreamProc)pfnTVPCreateStream;
 
 		InlineHook(pfnKrkrzMsvcFastCallTVPCreateStreamProc, KrkrzMsvcFastCallTVPCreateStream);
+
+		g_logger.WriteLine(L"KrKrZ Hooks Installed");
+	}
+	else
+	{
+		pfnTVPCreateStream = PE::SearchPattern(base, size, KR2_TVPCREATESTREAM_SIG, KR2_TVPCREATESTREAM_SIG_LEN);
+
+		if (pfnTVPCreateStream)
+		{
+			pfnKrkr2BcbFastCallTVPCreateStreamProc = pfnTVPCreateStream;
+
+			DetourUpdateThread(GetCurrentThread());
+			DetourTransactionBegin();
+			DetourAttach(&pfnKrkr2BcbFastCallTVPCreateStreamProc, Krkr2BcbFastCallTVPCreateStreamDetour);
+			DetourTransactionCommit();
+
+			g_logger.WriteLine(L"KrKr2 Hooks Installed");
+		}
 	}
 
 #ifdef FIND_EXPORTER
@@ -784,8 +849,6 @@ void OnStartup()
 	try
 	{
 		InstallHooks();
-
-		g_logger.WriteLine(L"Hooks Installed");
 	}
 	catch (const std::exception&)
 	{
