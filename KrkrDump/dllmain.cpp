@@ -565,7 +565,7 @@ tTJSBinaryStream* Krkr2BcbFastCallTVPCreateStreamCallback(ttstr* name, tjs_uint3
 {
 	_asm
 	{
-		mov	edx, flags
+		mov edx, flags
 		mov eax, name
 		call pfnKrkr2BcbFastCallTVPCreateStreamProc
 		ret
