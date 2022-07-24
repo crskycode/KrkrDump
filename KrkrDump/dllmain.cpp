@@ -19,6 +19,8 @@
 #include "tp_stub.h"
 #pragma warning ( pop )
 
+#undef min
+#undef max
 
 static HMODULE g_hEXE;
 static HMODULE g_hDLL;
@@ -170,11 +172,186 @@ class tTJSBinaryStream
 public:
 	virtual tjs_uint64 TJS_INTF_METHOD Seek(tjs_int64 offset, tjs_int whence) = 0;
 	virtual tjs_uint TJS_INTF_METHOD Read(void* buffer, tjs_uint read_size) = 0;
-	// virtual tjs_uint TJS_INTF_METHOD Write(const void* buffer, tjs_uint write_size) = 0;
-	// virtual void TJS_INTF_METHOD SetEndOfStorage() = 0;
-	// virtual tjs_uint64 TJS_INTF_METHOD GetSize() = 0;
-	// virtual ~tTJSBinaryStream() { }
+	virtual tjs_uint TJS_INTF_METHOD Write(const void* buffer, tjs_uint write_size) = 0;
+	virtual void TJS_INTF_METHOD SetEndOfStorage() = 0;
+	virtual tjs_uint64 TJS_INTF_METHOD GetSize() = 0;
+	virtual ~tTJSBinaryStream() { }
 };
+
+
+// 
+// Version : KRKRZ (MSVC)
+// 
+#define KRKRZ_OPERATOR_NEW_SIG "\x55\x8B\xEC\xEB\x1F\xFF\x75\x08\xE8\x2A\x2A\x2A\x2A\x59\x85\xC0\x75\x12\x83\x7D\x08\xFF\x75\x07\xE8\x2A\x2A\x2A\x2A\xEB\x05\xE8\x2A\x2A\x2A\x2A\xFF\x75\x08\xE8\x2A\x2A\x2A\x2A\x59\x85\xC0\x74\xD4\x5D\xC3"
+#define KRKRZ_OPERATOR_NEW_SIG_LEN ( sizeof(KRKRZ_OPERATOR_NEW_SIG) - 1 )
+// Prototype
+typedef void* (_cdecl* tKrkrzCdeclNewProc)(size_t);
+// Original
+tKrkrzCdeclNewProc pfnKrkrzNew = nullptr;
+
+
+#define KRKRZ_FREE_SIG "\x8B\xFF\x55\x8B\xEC\x83\x7D\x08\x00\x74\x2D\xFF\x75\x08\x6A\x00\xFF\x35\x2A\x2A\x2A\x2A\xFF\x15\x2A\x2A\x2A\x2A\x85\xC0\x75\x18\x56\xE8\x2A\x2A\x2A\x2A\x8B\xF0\xFF\x15\x2A\x2A\x2A\x2A\x50\xE8\x2A\x2A\x2A\x2A\x59\x89\x06\x5E\x5D\xC3"
+#define KRKRZ_FREE_SIG_LEN ( sizeof(KRKRZ_FREE_SIG) - 1 )
+// Prototype
+typedef void(_cdecl* tKrkrzCdeclFreeProc)(void*);
+// Original
+tKrkrzCdeclFreeProc pfnKrkrzFree = nullptr;
+
+
+static bool g_engineAllocatorInitialized = false;
+
+
+void* KrkrNew(size_t count)
+{
+	// TODO: Krkr2
+	return pfnKrkrzNew(count);
+}
+
+
+void KrkrFree(void* ptr)
+{
+	// TODO: Krkr2
+	return pfnKrkrzFree(ptr);
+}
+
+
+//
+// Re-implement
+//
+class CMemoryStream : public tTJSBinaryStream
+{
+public:
+	static void* operator new(size_t count)
+	{
+		return KrkrNew(count);
+	}
+
+
+	static void operator delete(void* ptr)
+	{
+		return KrkrFree(ptr);
+	}
+
+
+	CMemoryStream(const uint8_t* data, size_t size)
+	{
+		if (size > 0)
+		{
+			m_data.resize(size);
+			memcpy(m_data.data(), data, size);
+		}
+		m_size = size;
+		m_offset = 0;
+	}
+
+
+	CMemoryStream(const std::vector<uint8_t>& data)
+	{
+		m_data = data;
+		m_size = m_data.size();
+		m_offset = 0;
+	}
+
+
+	CMemoryStream(std::vector<uint8_t>&& data)
+	{
+		m_data = std::move(data);
+		m_size = m_data.size();
+		m_offset = 0;
+	}
+
+
+	CMemoryStream(CMemoryStream&& o) noexcept
+	{
+		m_data = std::move(o.m_data);
+		m_size = o.m_size;
+		m_offset = o.m_offset;
+	}
+
+
+	CMemoryStream(const CMemoryStream&) = delete;
+	CMemoryStream& operator=(const CMemoryStream&) = delete;
+
+
+	~CMemoryStream()
+	{
+		m_data.clear();
+		m_size = 0;
+		m_offset = 0;
+	}
+
+
+	tjs_uint64 TJS_INTF_METHOD Seek(tjs_int64 offset, tjs_int whence) override
+	{
+		switch (whence)
+		{
+			case TJS_BS_SEEK_SET:
+			{
+				if (offset >= 0 && offset <= m_size)
+					m_offset = (ptrdiff_t)offset;
+				break;
+			}
+			case TJS_BS_SEEK_CUR:
+			{
+				tjs_int64 new_offset = m_offset + offset;
+				if (new_offset >= 0 && new_offset <= m_size)
+					m_offset = (ptrdiff_t)new_offset;
+				break;
+			}
+			case TJS_BS_SEEK_END:
+			{
+				tjs_int64 new_offset = m_size + offset;
+				if (new_offset >= 0 && new_offset <= m_size)
+					m_offset = (ptrdiff_t)new_offset;
+				break;
+			}
+		}
+
+		return m_offset;
+	}
+
+
+	tjs_uint TJS_INTF_METHOD Read(void* buffer, tjs_uint read_size) override
+	{
+		tjs_uint count = std::min((size_t)read_size, m_size - m_offset);
+
+		if (count > 0)
+		{
+			memcpy(buffer, m_data.data() + m_offset, count);
+			m_offset += count;
+			return count;
+		}
+
+		return 0;
+	}
+
+
+	tjs_uint TJS_INTF_METHOD Write(const void* buffer, tjs_uint write_size) override
+	{
+		UNREFERENCED_PARAMETER(buffer);
+		UNREFERENCED_PARAMETER(write_size);
+		return 0;
+	}
+
+
+	void TJS_INTF_METHOD SetEndOfStorage() override
+	{
+		m_offset = m_size;
+	}
+
+
+	tjs_uint64 TJS_INTF_METHOD GetSize() override
+	{
+		return m_size;
+	}
+
+
+private:
+	std::vector<uint8_t> m_data;
+	size_t m_size;
+	ptrdiff_t m_offset;
+};
+
 
 static bool g_enableExtract;
 
@@ -800,6 +977,15 @@ void InstallHooks()
 
 			g_logger.WriteLine(L"KrKr2 Hooks Installed");
 		}
+	}
+
+	pfnKrkrzNew = (tKrkrzCdeclNewProc)PE::SearchPattern(base, size, KRKRZ_OPERATOR_NEW_SIG, KRKRZ_OPERATOR_NEW_SIG_LEN);
+	pfnKrkrzFree = (tKrkrzCdeclFreeProc)PE::SearchPattern(base, size, KRKRZ_FREE_SIG, KRKRZ_FREE_SIG_LEN);
+	
+	if (pfnKrkrzNew && pfnKrkrzFree)
+	{
+		g_engineAllocatorInitialized = true;
+		g_logger.WriteLine(L"KrKrz Allocator Initialized");
 	}
 
 #ifdef FIND_EXPORTER
