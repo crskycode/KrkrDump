@@ -198,19 +198,33 @@ typedef void(_cdecl* tKrkrzCdeclFreeProc)(void*);
 tKrkrzCdeclFreeProc pfnKrkrzFree = nullptr;
 
 
+//
+// Version : KRKR2 (BCB)
+//
+#define KRKR2_OPERATOR_NEW_SIG "\x55\x8B\xEC\x83\xC4\xD8\xB8\x2A\x2A\x2A\x2A\x53\x56\x57\x8D\x7D\xFC\x8B\x5D\x08\xE8\x2A\x2A\x2A\x2A\x85\xDB\x75\x53\xBB\x2A\x2A\x2A\x2A\xEB\x4C\x83\x3D\x2A\x2A\x2A\x2A\x2A\x74\x08\xFF\x15\x2A\x2A\x2A\x2A\xEB\x3B\x8D\x45\xD8\xBA\x2A\x2A\x2A\x2A\x50\x6A\x00\x6A\x00\x6A\x00\x6A\x01\x68\x2A\x2A\x2A\x2A\x6A\x00\xB9\x2A\x2A\x2A\x2A\x66\xC7\x45\x2A\x2A\x2A\x89\x17\xFF\x45\xF4\x89\x0F\xFF\x45\xF4\x57\x68\x2A\x2A\x2A\x2A\xE8\x2A\x2A\x2A\x2A\x83\xC4\x24\x53\xE8\x2A\x2A\x2A\x2A\x59\x8B\xF0\x85\xC0\x74\xA7\x8B\xC6\x8B\x55\xD8\x64\x89\x15\x2A\x2A\x2A\x2A\x5F\x5E\x5B\x8B\xE5\x5D\xC3"
+#define KRKR2_OPERATOR_NEW_SIG_LEN ( sizeof(KRKR2_OPERATOR_NEW_SIG) - 1 )
+// Prototype
+typedef void* (_cdecl* tKrkr2CdeclNewProc)(size_t);
+
+
+#define KRKR2_FREE_SIG "\x55\x8B\xEC\x83\xC4\xF4\x53\x8B\x45\x08\x85\xC0\x74\x0F\x8B\xD8\x8D\x45\xF4\xE8\x2A\x2A\x2A\x2A\x8B\xC3\xFF\x55\xF8\x5B\x8B\xE5\x5D\xC3"
+#define KRKR2_FREE_SIG_LEN ( sizeof(KRKR2_FREE_SIG) - 1 )
+// Prototype
+typedef void(_cdecl* tKrkr2CdeclFreeProc)(void*);
+
+
 static bool g_engineAllocatorInitialized = false;
+static bool g_memoryStreamDestructorHooked = false;
 
 
 void* KrkrNew(size_t count)
 {
-	// TODO: Krkr2
 	return pfnKrkrzNew(count);
 }
 
 
 void KrkrFree(void* ptr)
 {
-	// TODO: Krkr2
 	return pfnKrkrzFree(ptr);
 }
 
@@ -351,6 +365,33 @@ private:
 	size_t m_size;
 	ptrdiff_t m_offset;
 };
+
+
+// Original
+PVOID pfnMemoryStreamDestructor = nullptr;
+// Hooked
+_declspec(naked)
+void Krkr2MemoryStreamDestructorDetour()
+{
+	_asm
+	{
+		mov ecx, eax
+		push edx
+		call pfnMemoryStreamDestructor
+		ret
+	}
+}
+
+
+void HookMemoryStreamDestructorForKrkr2(PVOID pObj)
+{
+	PDWORD pVftbl = *(PDWORD*)pObj;
+
+	pfnMemoryStreamDestructor = (PVOID)pVftbl[5];
+
+	PVOID pfnDetour = Krkr2MemoryStreamDestructorDetour;
+	PE::WriteMemory(&pVftbl[5], &pfnDetour, sizeof(pfnDetour));
+}
 
 
 static bool g_enableExtract;
@@ -981,11 +1022,22 @@ void InstallHooks()
 
 	pfnKrkrzNew = (tKrkrzCdeclNewProc)PE::SearchPattern(base, size, KRKRZ_OPERATOR_NEW_SIG, KRKRZ_OPERATOR_NEW_SIG_LEN);
 	pfnKrkrzFree = (tKrkrzCdeclFreeProc)PE::SearchPattern(base, size, KRKRZ_FREE_SIG, KRKRZ_FREE_SIG_LEN);
-	
+
 	if (pfnKrkrzNew && pfnKrkrzFree)
 	{
 		g_engineAllocatorInitialized = true;
 		g_logger.WriteLine(L"KrKrz Allocator Initialized");
+	}
+	else
+	{
+		pfnKrkrzNew = (tKrkrzCdeclNewProc)PE::SearchPattern(base, size, KRKR2_OPERATOR_NEW_SIG, KRKR2_OPERATOR_NEW_SIG_LEN);
+		pfnKrkrzFree = (tKrkrzCdeclFreeProc)PE::SearchPattern(base, size, KRKR2_FREE_SIG, KRKR2_FREE_SIG_LEN);
+
+		if (pfnKrkrzNew && pfnKrkrzFree)
+		{
+			g_engineAllocatorInitialized = true;
+			g_logger.WriteLine(L"KrKr2 Allocator Initialized");
+		}
 	}
 
 #ifdef FIND_EXPORTER
