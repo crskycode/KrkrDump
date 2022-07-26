@@ -179,6 +179,9 @@ public:
 };
 
 
+#ifdef MEMORYSTREAM
+
+
 // 
 // Version : KRKRZ (MSVC)
 // 
@@ -394,6 +397,9 @@ void HookMemoryStreamDestructorForKrkr2(PVOID pObj)
 	PVOID pfnDetour = Krkr2MemoryStreamDestructorDetour;
 	PE::WriteMemory(&pVftbl[5], &pfnDetour, sizeof(pfnDetour));
 }
+
+
+#endif
 
 
 static bool g_enableExtract;
@@ -1022,6 +1028,7 @@ void InstallHooks()
 		}
 	}
 
+#ifdef MEMORYSTREAM
 	pfnKrkrzNew = (tKrkrzCdeclNewProc)PE::SearchPattern(base, size, KRKRZ_OPERATOR_NEW_SIG, KRKRZ_OPERATOR_NEW_SIG_LEN);
 	pfnKrkrzFree = (tKrkrzCdeclFreeProc)PE::SearchPattern(base, size, KRKRZ_FREE_SIG, KRKRZ_FREE_SIG_LEN);
 
@@ -1041,6 +1048,7 @@ void InstallHooks()
 			g_logger.WriteLine(L"KrKr2 Allocator Initialized");
 		}
 	}
+#endif
 
 #ifdef FIND_EXPORTER
 	InlineHook(pfnGetProcAddress, HookGetProcAddress);
