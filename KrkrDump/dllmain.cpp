@@ -280,6 +280,8 @@ public:
 		m_data = std::move(o.m_data);
 		m_size = o.m_size;
 		m_offset = o.m_offset;
+		o.m_size = 0;
+		o.m_offset = 0;
 	}
 
 
