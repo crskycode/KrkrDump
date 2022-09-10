@@ -31,6 +31,7 @@ static std::wstring g_dllPath;
 static Log::Logger g_logger;
 
 static int g_logLevel;
+static bool g_truncateLog;
 
 
 template<class T>
@@ -822,6 +823,7 @@ void Krkr2BcbFastCallTVPCreateStreamDetour()
 void LoadConfiguration()
 {
 	g_logLevel = 0;
+	g_truncateLog = false;
 	g_enableExtract = false;
 	g_outputPath.clear();
 	g_regexRules.clear();
@@ -841,6 +843,13 @@ void LoadConfiguration()
 		if (jLogLevel)
 		{
 			g_logLevel = (int)cJSON_GetNumberValue(jLogLevel);
+		}
+
+		cJSON* jTruncateLog = cJSON_GetObjectItem(jRoot, "truncateLog");
+
+		if (jTruncateLog)
+		{
+			g_truncateLog = cJSON_IsTrue(jTruncateLog);
 		}
 
 		cJSON* jEnable = cJSON_GetObjectItem(jRoot, "enableExtract");
@@ -1066,16 +1075,7 @@ void OnStartup()
 	Util::WriteDebugMessage(L"[KrkrDump] EXE Path = \"%s\"", exePath.c_str());
 	Util::WriteDebugMessage(L"[KrkrDump] DLL Path = \"%s\"", dllPath.c_str());
 	Util::WriteDebugMessage(L"[KrkrDump] Log Path = \"%s\"", logPath.c_str());
-	Util::WriteDebugMessage(L"[KrkrDump] Cfg Path = \"%s\"", logPath.c_str());
-
-	// !!!
-	File::Delete(logPath);
-
-	g_logger.Open(logPath.c_str());
-
-	g_logger.WriteLine(L"Startup");
-
-	g_logger.WriteLine(L"Game Executable Path = \"%s\"", exePath.c_str());
+	Util::WriteDebugMessage(L"[KrkrDump] Cfg Path = \"%s\"", cfgPath.c_str());
 
 	g_exePath = std::move(exePath);
 	g_dllPath = std::move(dllPath);
@@ -1086,12 +1086,23 @@ void OnStartup()
 	{
 		LoadConfiguration();
 
-		g_logger.WriteLine(L"Configuration loaded");
+		Util::WriteDebugMessage(L"Configuration loaded");
 	}
 	catch (const std::exception&)
 	{
-		g_logger.WriteLine(L"Failed to load configuration");
+		Util::WriteDebugMessage(L"Failed to load configuration");
 	}
+
+	if (g_truncateLog)
+	{
+		File::Delete(logPath);
+	}
+
+	g_logger.Open(logPath.c_str());
+
+	g_logger.WriteLine(L"Startup");
+
+	g_logger.WriteLine(L"Game Executable Path = \"%s\"", g_exePath.c_str());
 
 	try
 	{
