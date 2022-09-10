@@ -34,6 +34,10 @@ static int g_logLevel;
 static bool g_truncateLog;
 
 
+#define FIND_EXPORTER
+#define DUMP_HASH
+
+
 template<class T>
 void InlineHook(T& OriginalFunction, T DetourFunction)
 {
@@ -52,6 +56,122 @@ void UnInlineHook(T& OriginalFunction, T DetourFunction)
 	DetourDetach(&(PVOID&)OriginalFunction, (PVOID&)DetourFunction);
 	DetourTransactionCommit();
 }
+
+
+#ifdef DUMP_HASH
+
+
+#define PATHHASHSIG "\x55\x8B\xEC\x83\xEC\x50\xFF\x71\x08\xC7\x45\x2A\x2A\x2A\x2A\x2A\xFF\x71\x04\x8D\x4D\xB0"
+#define PATHHASHSIG_LEN ( sizeof(PATHHASHSIG) - 1 )
+
+
+#define NAMEHASHSIG "\x55\x8B\xEC\x81\xEC\x2A\x2A\x2A\x2A\xA1\x2A\x2A\x2A\x2A\x33\xC5\x89\x45\xFC\x8B\x45\x08\x56\x8B\x75\x10\x57"
+#define NAMEHASHSIG_LEN ( sizeof(NAMEHASHSIG) - 1 )
+
+
+class Hasher;
+typedef int (Hasher::*ComputeHashProc)(tTJSVariant*, tTJSString*, tTJSString*);
+
+
+ComputeHashProc pfnComputePathName = NULL;
+ComputeHashProc pfnComputeFileName = NULL;
+
+
+static bool g_enableDumpHash = false;
+
+
+void PrintBinary(wchar_t* _Buf, size_t _BufSize, const void* _Data, size_t _Size)
+{
+	auto _Ptr = _Buf;
+	auto _End = _Buf + _BufSize;
+	auto _In = (byte*)_Data;
+
+	if (!_Buf || !_BufSize || !_Data || !_Size)
+		return;
+
+	for (size_t i = 0; i < _Size; i++)
+	{
+		if (_Ptr + 3 > _End)
+			break;
+
+		swprintf(_Ptr, L"%02X", _In[i]);
+
+		_Ptr += 2;
+		_In++;
+	}
+}
+
+
+class Hasher
+{
+public:
+	int ComputePathName(tTJSVariant* hash, tTJSString* input, tTJSString* salt)
+	{
+		int result = (this->*pfnComputePathName)(hash, input, salt);
+
+		if (hash)
+		{
+			auto octet = hash->AsOctetNoAddRef();
+
+			if (octet)
+			{
+				wchar_t buffer[80] {};
+				
+				PrintBinary(buffer, _countof(buffer), octet->GetData(), octet->GetLength());
+				g_logger.WriteLine(L"PathHash: \"%s\" \"%s\"", input->c_str(), buffer);
+			}
+		}
+
+		return result;
+	}
+
+	int ComputeFileName(tTJSVariant* hash, tTJSString* input, tTJSString* salt)
+	{
+		int result = (this->*pfnComputeFileName)(hash, input, salt);
+
+		if (hash)
+		{
+			auto octet = hash->AsOctetNoAddRef();
+
+			if (octet)
+			{
+				wchar_t buffer[80] {};
+
+				PrintBinary(buffer, _countof(buffer), octet->GetData(), octet->GetLength());
+				g_logger.WriteLine(L"NameHash: \"%s\" \"%s\"", input->c_str(), buffer);
+			}
+		}
+
+		return result;
+	}
+};
+
+
+void HookHash(HMODULE hModule)
+{
+	PVOID base = PE::GetModuleBase(hModule);
+	DWORD size = PE::GetModuleSize(hModule);
+
+	*(PVOID*)&pfnComputePathName = PE::SearchPattern(base, size, PATHHASHSIG, PATHHASHSIG_LEN);
+
+	if (pfnComputePathName)
+	{
+		InlineHook(pfnComputePathName, &Hasher::ComputePathName);
+		g_logger.WriteLine(L"Hook PathNameHash installed");
+	}
+
+	*(PVOID*)&pfnComputeFileName = PE::SearchPattern(base, size, NAMEHASHSIG, NAMEHASHSIG_LEN);
+
+	if (pfnComputeFileName)
+	{
+		InlineHook(pfnComputeFileName, &Hasher::ComputeFileName);
+		g_logger.WriteLine(L"Hook FileNameHash installed");
+	}
+}
+
+
+#endif
+
 
 #ifdef FIND_EXPORTER
 
@@ -135,6 +255,13 @@ FARPROC WINAPI HookGetProcAddress(HMODULE hModule, LPCSTR lpProcName)
 					InlineHook(pfnV2Link, HookV2Link);
 
 					g_logger.WriteLine(L"Hook V2Link installed");
+
+#ifdef DUMP_HASH
+					if (g_enableDumpHash)
+					{
+						HookHash(hModule);
+					}
+#endif
 				}
 			}
 		}
@@ -991,6 +1118,15 @@ void LoadConfiguration()
 		{
 			g_decryptSimpleCrypt = cJSON_IsTrue(jDecrypt);
 		}
+
+#ifdef DUMP_HASH
+		cJSON* jDumpHash = cJSON_GetObjectItem(jRoot, "dumpHash");
+
+		if (jDumpHash)
+		{
+			g_enableDumpHash = cJSON_IsTrue(jDumpHash);
+		}
+#endif
 
 		cJSON_Delete(jRoot);
 	}
