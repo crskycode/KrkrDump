@@ -2,6 +2,7 @@
 
 #include <windows.h>
 #include <shlobj.h>
+#include <ctime>
 #include "stringhelper.h"
 
 namespace Util
@@ -258,6 +259,32 @@ namespace Util
         {
             return std::wstring();
         }
+
+        return std::wstring(buf);
+    }
+
+    std::string GetTimeString(const char* format)
+    {
+        time_t tv;
+        struct tm tm;
+        char buf[32];
+
+        time(&tv);
+        localtime_s(&tm, &tv);
+        strftime(buf, sizeof(buf), format, &tm);
+
+        return std::string(buf);
+    }
+
+    std::wstring GetTimeString(const wchar_t* format)
+    {
+        time_t tv;
+        struct tm tm;
+        wchar_t buf[32];
+
+        time(&tv);
+        localtime_s(&tm, &tv);
+        wcsftime(buf, _countof(buf), format, &tm);
 
         return std::wstring(buf);
     }

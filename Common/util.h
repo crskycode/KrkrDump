@@ -48,4 +48,10 @@ namespace Util
 
 	// Display a folder select dialog.
 	std::wstring OpenFolderDialog(const std::wstring& title);
+
+	// Get a formatted time string.
+	std::string GetTimeString(const char* format);
+
+	// Get a formatted time string.
+	std::wstring GetTimeString(const wchar_t* format);
 }
