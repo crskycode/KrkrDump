@@ -93,11 +93,8 @@ void PrintBinary(wchar_t* _Buf, size_t _BufSize, const void* _Data, size_t _Size
 	{
 		if (_Ptr + 3 > _End)
 			break;
-
 		swprintf(_Ptr, L"%02X", _In[i]);
-
 		_Ptr += 2;
-		_In++;
 	}
 }
 
@@ -109,7 +106,7 @@ public:
 	{
 		int result = (this->*pfnComputePathName)(hash, input, salt);
 
-		if (hash)
+		if (hash && hash->Type() == tvtOctet)
 		{
 			auto octet = hash->AsOctetNoAddRef();
 
@@ -118,7 +115,7 @@ public:
 				wchar_t buffer[80] {};
 				
 				PrintBinary(buffer, _countof(buffer), octet->GetData(), octet->GetLength());
-				g_logger.WriteLine(L"PathHash: \"%s\" \"%s\"", input->c_str(), buffer);
+				g_logger.WriteLine(L"PathHash: \"%s\" \"%s\" \"%s\"", input->c_str(), salt->c_str(), buffer);
 			}
 		}
 
@@ -129,7 +126,7 @@ public:
 	{
 		int result = (this->*pfnComputeFileName)(hash, input, salt);
 
-		if (hash)
+		if (hash && hash->Type() == tvtOctet)
 		{
 			auto octet = hash->AsOctetNoAddRef();
 
@@ -138,7 +135,7 @@ public:
 				wchar_t buffer[80] {};
 
 				PrintBinary(buffer, _countof(buffer), octet->GetData(), octet->GetLength());
-				g_logger.WriteLine(L"NameHash: \"%s\" \"%s\"", input->c_str(), buffer);
+				g_logger.WriteLine(L"NameHash: \"%s\" \"%s\" \"%s\"", input->c_str(), salt->c_str(), buffer);
 			}
 		}
 
