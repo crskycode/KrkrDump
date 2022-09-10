@@ -12,6 +12,7 @@
 #include "zlib.h"
 #include <regex>
 #include <vector>
+#include <unordered_set>
 #include <shlobj.h>
 
 #pragma warning ( push )
@@ -100,6 +101,10 @@ void PrintBinary(wchar_t* _Buf, size_t _BufSize, const void* _Data, size_t _Size
 }
 
 
+std::unordered_set<std::wstring> g_pathHashSet;
+std::unordered_set<std::wstring> g_nameHashSet;
+
+
 class Hasher
 {
 public:
@@ -116,7 +121,13 @@ public:
 				wchar_t buffer[80] {};
 				
 				PrintBinary(buffer, _countof(buffer), octet->GetData(), octet->GetLength());
-				g_logger.WriteLine(L"PathHash: \"%s\" \"%s\" \"%s\"", input->c_str(), salt->c_str(), buffer);
+
+				auto ret = g_pathHashSet.insert(buffer);
+
+				if (ret.second)
+				{
+					g_logger.WriteLine(L"PathHash: \"%s\" \"%s\" \"%s\"", input->c_str(), salt->c_str(), buffer);
+				}
 			}
 		}
 
@@ -136,7 +147,13 @@ public:
 				wchar_t buffer[80] {};
 
 				PrintBinary(buffer, _countof(buffer), octet->GetData(), octet->GetLength());
-				g_logger.WriteLine(L"NameHash: \"%s\" \"%s\" \"%s\"", input->c_str(), salt->c_str(), buffer);
+
+				auto ret = g_nameHashSet.insert(buffer);
+
+				if (ret.second)
+				{
+					g_logger.WriteLine(L"NameHash: \"%s\" \"%s\" \"%s\"", input->c_str(), salt->c_str(), buffer);
+				}
 			}
 		}
 
