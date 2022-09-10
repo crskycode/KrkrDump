@@ -1202,8 +1202,10 @@ void OnStartup()
 {
 	std::wstring exePath = Util::GetModulePathW(g_hEXE);
 	std::wstring dllPath = Util::GetModulePathW(g_hDLL);
-	std::wstring logPath = Path::ChangeExtension(dllPath, L"log");
 	std::wstring cfgPath = Path::ChangeExtension(dllPath, L"json");
+
+	// Build log file path
+	auto logPath = Path::GetDirectoryName(dllPath) + L"\\" + Path::GetFileNameWithoutExtension(dllPath) + L"-" + Util::GetTimeString(L"%Y-%m-%d") + L".log";
 
 	Util::WriteDebugMessage(L"[KrkrDump] EXE Path = \"%s\"", exePath.c_str());
 	Util::WriteDebugMessage(L"[KrkrDump] DLL Path = \"%s\"", dllPath.c_str());
@@ -1233,7 +1235,7 @@ void OnStartup()
 
 	g_logger.Open(logPath.c_str());
 
-	g_logger.WriteLine(L"Startup");
+	g_logger.WriteLine(L"KrkrDump Startup");
 
 	g_logger.WriteLine(L"Game Executable Path = \"%s\"", g_exePath.c_str());
 
