@@ -32,6 +32,7 @@ static Log::Logger g_logger;
 
 static int g_logLevel;
 static bool g_truncateLog;
+static bool g_tvpStubInitialized = false;
 
 
 #define FIND_EXPORTER
@@ -106,7 +107,7 @@ public:
 	{
 		int result = (this->*pfnComputePathName)(hash, input, salt);
 
-		if (hash && hash->Type() == tvtOctet)
+		if (g_tvpStubInitialized && hash && hash->Type() == tvtOctet)
 		{
 			auto octet = hash->AsOctetNoAddRef();
 
@@ -126,7 +127,7 @@ public:
 	{
 		int result = (this->*pfnComputeFileName)(hash, input, salt);
 
-		if (hash && hash->Type() == tvtOctet)
+		if (g_tvpStubInitialized && hash && hash->Type() == tvtOctet)
 		{
 			auto octet = hash->AsOctetNoAddRef();
 
@@ -194,6 +195,7 @@ HRESULT _stdcall HookV2Link(iTVPFunctionExporter* exporter)
 		g_logger.WriteLine(L"Caught iTVPFunctionExporter(%p)", exporter);
 
 		TVPInitImportStub(exporter);
+		g_tvpStubInitialized = true;
 
 		g_logger.WriteLine(L"Stub initialized");
 
