@@ -80,7 +80,7 @@ ComputeHashProc pfnComputePathName = NULL;
 ComputeHashProc pfnComputeFileName = NULL;
 
 
-static bool g_enableDumpHash = false;
+static bool g_enableDumpHash = true;
 
 
 void PrintBinary(wchar_t* _Buf, size_t _BufSize, const void* _Data, size_t _Size)
@@ -1126,14 +1126,14 @@ void Krkr2BcbFastCallTVPCreateStreamDetour()
 
 void LoadConfiguration()
 {
-	g_logLevel = 0;
-	g_truncateLog = false;
-	g_enableExtract = false;
+	g_logLevel = 1;
+	g_truncateLog = true;
+	g_enableExtract = true;
 	g_outputPath.clear();
 	g_regexRules.clear();
 	g_includeExtensions.clear();
 	g_excludeExtensions.clear();
-	g_decryptSimpleCrypt = false;
+	g_decryptSimpleCrypt = true;
 
 	std::wstring jsonPath = Path::ChangeExtension(g_dllPath, L"json");
 	std::string json = File::ReadAllText(jsonPath);
