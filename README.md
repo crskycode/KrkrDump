@@ -19,6 +19,9 @@ Here is an example of a valid config file:
         "arc://./(.+)",
         "bres://./(.+)"
     ],
+    "whitelist": [
+        ".*"
+    ],
     "includeExtensions": [],
     "excludeExtensions": [
         ".ogg"
