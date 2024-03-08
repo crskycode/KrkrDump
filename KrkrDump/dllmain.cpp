@@ -798,9 +798,10 @@ std::wstring MatchPath(const std::wstring& path)
 			std::wsmatch result;
 
 			// Use newPath for matching
-			if (!std::regex_match(newPath, result, expr))
-				newPath.clear();
+			if (std::regex_match(newPath, result, expr))
+				return newPath;
 		}
+		newPath.clear();
 	}
 
 	return newPath;
@@ -1378,7 +1379,7 @@ void InstallHooks()
 	DWORD size = PE::GetModuleSize(g_hEXE);
 
 	g_logger.WriteLine(L"Image Base = %p", base);
-	g_logger.WriteLine(L"Image Base = %X", size);
+	g_logger.WriteLine(L"Image Size = %X", size);
 
 	PVOID pfnTVPCreateStream = PE::SearchPattern(base, size, TVPCREATESTREAM_SIG, TVPCREATESTREAM_SIG_LEN);
 
