@@ -712,6 +712,7 @@ static bool g_enableExtract;
 static std::wstring g_outputPath;
 
 static std::vector<std::wstring> g_regexRules;
+static std::vector<std::wstring> g_regexWhitelist;
 
 static std::vector<std::wstring> g_includeExtensions;
 static std::vector<std::wstring> g_excludeExtensions;
@@ -786,6 +787,21 @@ std::wstring MatchPath(const std::wstring& path)
 				}
 			}
 		}
+	}
+
+	// Overwrite the result of (in/ex)clude extensions
+	if (!g_regexWhitelist.empty())
+	{
+		for (auto& regex : g_regexWhitelist)
+		{
+			std::wregex expr(regex, std::regex_constants::icase);
+			std::wsmatch result;
+
+			// Use newPath for matching
+			if (std::regex_match(newPath, result, expr))
+				return newPath;
+		}
+		newPath.clear();
 	}
 
 	return newPath;
@@ -1131,6 +1147,7 @@ void LoadConfiguration()
 	g_enableExtract = false;
 	g_outputPath.clear();
 	g_regexRules.clear();
+	g_regexWhitelist.clear();
 	g_includeExtensions.clear();
 	g_excludeExtensions.clear();
 	g_decryptSimpleCrypt = false;
@@ -1219,6 +1236,38 @@ void LoadConfiguration()
 							}
 
 							g_regexRules.push_back(rule);
+						}
+					}
+				}
+			}
+		}
+
+		cJSON* jWhitelist = cJSON_GetObjectItem(jRoot, "whitelist");
+
+		if (jWhitelist)
+		{
+			if (cJSON_IsArray(jWhitelist))
+			{
+				int count = cJSON_GetArraySize(jWhitelist);
+
+				for (int i = 0; i < count; i++)
+				{
+					cJSON* jItem = cJSON_GetArrayItem(jWhitelist, i);
+
+					if (jItem)
+					{
+						char* value = cJSON_GetStringValue(jItem);
+
+						if (value)
+						{
+							std::wstring rule = Encoding::AnsiToUnicode(value, Encoding::UTF_8);
+
+							if (rule.empty())
+							{
+								continue;
+							}
+
+							g_regexWhitelist.push_back(rule);
 						}
 					}
 				}
@@ -1330,7 +1379,7 @@ void InstallHooks()
 	DWORD size = PE::GetModuleSize(g_hEXE);
 
 	g_logger.WriteLine(L"Image Base = %p", base);
-	g_logger.WriteLine(L"Image Base = %X", size);
+	g_logger.WriteLine(L"Image Size = %X", size);
 
 	PVOID pfnTVPCreateStream = PE::SearchPattern(base, size, TVPCREATESTREAM_SIG, TVPCREATESTREAM_SIG_LEN);
 
