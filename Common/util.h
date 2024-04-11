@@ -49,6 +49,12 @@ namespace Util
 	// Display a folder select dialog.
 	std::wstring OpenFolderDialog(const std::wstring& title);
 
+	// Display a file select dialog.
+	std::string OpenFileDialog(const std::string& title, const std::string& filter);
+
+	// Display a file select dialog.
+	std::wstring OpenFileDialog(const std::wstring& title, const std::wstring& filter);
+
 	// Get a formatted time string.
 	std::string GetTimeString(const char* format);
 

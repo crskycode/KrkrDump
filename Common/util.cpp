@@ -263,6 +263,48 @@ namespace Util
         return std::wstring(buf);
     }
 
+	std::string OpenFileDialog(const std::string& title, const std::string& filter)
+	{
+		OPENFILENAMEA ofn{};
+		CHAR path[1024]{};
+
+		ofn.lStructSize = sizeof(ofn);
+		ofn.lpstrFile = path;
+		ofn.nMaxFile = _countof(path);
+		ofn.lpstrFilter = filter.c_str();
+		ofn.nFilterIndex = 0;
+		ofn.lpstrTitle = title.c_str();
+		ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+
+		if (GetOpenFileNameA(&ofn) == FALSE)
+		{
+			return std::string();
+		}
+
+		return std::string(ofn.lpstrFile);
+	}
+
+	std::wstring OpenFileDialog(const std::wstring& title, const std::wstring& filter)
+	{
+		OPENFILENAMEW ofn{};
+		WCHAR path[1024]{};
+
+		ofn.lStructSize = sizeof(ofn);
+		ofn.lpstrFile = path;
+		ofn.nMaxFile = _countof(path);
+		ofn.lpstrFilter = filter.c_str();
+		ofn.nFilterIndex = 0;
+		ofn.lpstrTitle = title.c_str();
+		ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+
+		if (GetOpenFileNameW(&ofn) == FALSE)
+		{
+			return std::wstring();
+		}
+
+		return std::wstring(ofn.lpstrFile);
+	}
+
     std::string GetTimeString(const char* format)
     {
         time_t tv;
