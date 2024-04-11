@@ -18,14 +18,34 @@ int wmain(int argc, wchar_t* argv[])
 
 int wmain(int argc, wchar_t* argv[])
 {
+	std::wstring gamePath;
+
 	if (argc < 2)
 	{
 		printf("Usage:\n");
 		printf("  KrkrDumpLoader <path>\n\n");
+
+		wchar_t s_filter[] = L"Executable File (*.exe)\0*.exe\0";
+		std::wstring filter{ s_filter, _countof(s_filter) };
+		std::wstring filePath = Util::OpenFileDialog(L"Select Game.exe", filter);
+
+		if (filePath.empty())
+		{
+			return 1;
+		}
+
+		gamePath = Path::GetFullPath(filePath);
+	}
+	else
+	{
+		gamePath = Path::GetFullPath(argv[1]);
+	}
+
+	if (gamePath.empty())
+	{
 		return 1;
 	}
 
-	std::wstring gamePath = Path::GetFullPath(argv[1]);
 	std::wstring gameDirPath = Path::GetDirectoryName(gamePath);
 
 	std::wstring commandLine;
