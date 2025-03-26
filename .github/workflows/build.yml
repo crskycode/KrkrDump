@@ -1,0 +1,39 @@
+name: Build Solution with MSBuild
+
+on:
+  push:
+    branches:
+      - main # Trigger on push to main branch
+  pull_request:
+    branches:
+      - main # Trigger on pull requests to main branch
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      # Checkout the repository including submodules
+      - name: Checkout repository with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive # Ensure submodules are checked out recursively
+
+      # Set up MSBuild
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v1
+
+      # Build the solution using MSBuild
+      - name: Build solution with MSBuild
+        run: |
+          msbuild YourSolution.sln /p:Configuration=Release /p:Platform=x86 /restore
+        shell: pwsh
+
+      # Upload build artifacts
+      - name: Upload Release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Release-Build # Name of the artifact
+          path: |
+            ./Release/*.dll
+            ./Release/*.exe
