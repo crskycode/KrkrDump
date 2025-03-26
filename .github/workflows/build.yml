@@ -26,7 +26,7 @@ jobs:
       # Build the solution using MSBuild
       - name: Build solution with MSBuild
         run: |
-          msbuild YourSolution.sln /p:Configuration=Release /p:Platform=x86 /restore
+          msbuild ./KrkrDump.sln /p:Configuration=Release /p:Platform=x86 /restore
         shell: pwsh
 
       # Upload build artifacts
