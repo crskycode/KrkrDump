@@ -3,10 +3,10 @@ name: Build Solution with MSBuild
 on:
   push:
     branches:
-      - main # Trigger on push to main branch
+      - master # Trigger on push to main branch
   pull_request:
     branches:
-      - main # Trigger on pull requests to main branch
+      - master # Trigger on pull requests to main branch
 
 jobs:
   build:
