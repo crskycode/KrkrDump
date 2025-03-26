@@ -205,10 +205,10 @@ void PrintIndexKey(PVOID key, PVOID nonce)
 	wchar_t buf[80];
 
 	PrintBinary(buf, _countof(buf), key, 32);
-	g_logger.WriteLine(L"IndexKey: %s", buf);
+	g_logger.WriteLine(L"Index Key: %s", buf);
 
 	PrintBinary(buf, _countof(buf), nonce, 16);
-	g_logger.WriteLine(L"IndexNonce: %s", buf);
+	g_logger.WriteLine(L"Index Nonce: %s", buf);
 }
 
 
@@ -278,9 +278,9 @@ PVOID _fastcall HookCreateFilter(PVOID a1, PVOID a2, ULONGLONG a3, BYTE a4)
 	uint32_t splitPos = *(uint16_t*)((uintptr_t)a1 + 0x14);
 	uint32_t randomType = *(uint8_t*)((uintptr_t)a1 + 0x18);
 
-	g_logger.WriteLine(L"Filter Key: %llX", filterKey);
-	g_logger.WriteLine(L"Split Pos Mask: %X", splitPosMask);
-	g_logger.WriteLine(L"Split Pos: %X", splitPos);
+	g_logger.WriteLine(L"Filter Key: 0x%llX", filterKey);
+	g_logger.WriteLine(L"Split Pos Mask: 0x%X", splitPosMask);
+	g_logger.WriteLine(L"Split Pos: 0x%X", splitPos);
 	g_logger.WriteLine(L"Random Type: %d", randomType);
 
 	uint8_t* cxdecTable = (uint8_t*)((uintptr_t)a1 + 0x20);
