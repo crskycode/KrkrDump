@@ -85,7 +85,7 @@ ComputeHashProc pfnComputeFileName = NULL;
 static bool g_enableDumpHash = false;
 
 
-void PrintBinary(wchar_t* _Buf, size_t _BufSize, const void* _Data, size_t _Size)
+void PrintHexString(wchar_t* _Buf, size_t _BufSize, const void* _Data, size_t _Size)
 {
 	auto _Ptr = _Buf;
 	auto _End = _Buf + _BufSize;
@@ -123,7 +123,7 @@ public:
 			{
 				wchar_t buffer[80] {};
 				
-				PrintBinary(buffer, _countof(buffer), octet->GetData(), octet->GetLength());
+				PrintHexString(buffer, _countof(buffer), octet->GetData(), octet->GetLength());
 
 				auto ret = g_pathHashSet.insert(buffer);
 
@@ -149,7 +149,7 @@ public:
 			{
 				wchar_t buffer[80] {};
 
-				PrintBinary(buffer, _countof(buffer), octet->GetData(), octet->GetLength());
+				PrintHexString(buffer, _countof(buffer), octet->GetData(), octet->GetLength());
 
 				auto ret = g_nameHashSet.insert(buffer);
 
@@ -204,10 +204,10 @@ void PrintIndexKey(PVOID key, PVOID nonce)
 {
 	wchar_t buf[80];
 
-	PrintBinary(buf, _countof(buf), key, 32);
+	PrintHexString(buf, _countof(buf), key, 32);
 	g_logger.WriteLine(L"Index Key: %s", buf);
 
-	PrintBinary(buf, _countof(buf), nonce, 16);
+	PrintHexString(buf, _countof(buf), nonce, 16);
 	g_logger.WriteLine(L"Index Nonce: %s", buf);
 }
 
