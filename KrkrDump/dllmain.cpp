@@ -289,6 +289,51 @@ PVOID _fastcall HookCreateFilter(PVOID a1, PVOID a2, ULONGLONG a3, BYTE a4)
 	File::WriteAllBytes(path + L"\\CxdecTable.bin", cxdecTable, 0x1000);
 	File::WriteAllBytes(path + L"\\CxdecOrder.bin", cxdecOrder, 0x11);
 
+	auto isOrderValid = true;
+
+	for (int i = 0; i < 0x11; i++)
+	{
+		if (i >= 0x00 && i <= 0x07 && cxdecOrder[i] > 7)
+		{
+			isOrderValid = false;
+			break;
+		}
+		if (i >= 0x08 && i <= 0x0D && cxdecOrder[i] > 5)
+		{
+			isOrderValid = false;
+			break;
+		}
+		if (i >= 0x0E && i <= 0x10 && cxdecOrder[i] > 2)
+		{
+			isOrderValid = false;
+			break;
+		}
+	}
+
+	if (isOrderValid)
+	{
+		constexpr int RO8_TO_GARBRO[] = { 0, 2, 3, 1, 5, 6, 7, 4 };
+		constexpr int RO6_TO_GARBRO[] = { 2, 5, 3, 4, 1, 0 };
+		constexpr int RO3_TO_GARBRO[] = { 0, 1, 2 };
+
+		int RO8[8]{};
+		int RO6[6]{};
+		int RO3[3]{};
+
+		for (int i = 0, j = 0x0; i < 8; i++, j++)
+			RO8[cxdecOrder[j]] = RO8_TO_GARBRO[i];
+
+		for (int i = 0, j = 0x8; i < 6; i++, j++)
+			RO6[cxdecOrder[j]] = RO6_TO_GARBRO[i];
+
+		for (int i = 0, j = 0xE; i < 3; i++, j++)
+			RO3[cxdecOrder[j]] = RO3_TO_GARBRO[i];
+
+		g_logger.WriteLine(L"Cxdec Order (8): %d, %d, %d, %d, %d, %d, %d, %d", RO8[0], RO8[1], RO8[2], RO8[3], RO8[4], RO8[5], RO8[6], RO8[7]);
+		g_logger.WriteLine(L"Cxdec Order (6): %d, %d, %d, %d, %d, %d", RO6[0], RO6[1], RO6[2], RO6[3], RO6[4], RO6[5]);
+		g_logger.WriteLine(L"Cxdec Order (3): %d, %d, %d", RO3[0], RO3[1], RO3[2]);
+	}
+
 	PVOID result = pfnCreateFilter(a1, a2, a3, a4);
 
 	UnInlineHook(pfnCreateFilter, HookCreateFilter);
