@@ -1,12 +1,12 @@
 # Kirikiri Z File Dumper
 
-This tool can works with for some new engines.
+This tool is designed to work with newer versions of the Kirikiri engine, enabling file extraction and analysis.
 
-## How to use
+## Usage Instructions
 
-The tool reads a json-based config file when it starts up. That config file should have the same name as the dll. e.g `KrkrDump.json`
+The tool requires a JSON configuration file that must share the same base name as the DLL (e.g., `KrkrDump.dll` and `KrkrDump.json`).
 
-Here is an example of a valid config file:
+### Configuration Example
 
 ```json
 {
@@ -27,18 +27,28 @@ Here is an example of a valid config file:
 }
 ```
 
-`loglevel`: Represent how diagnostic information outputs. Set to `0` means turn off any output. Set to `1` or `2` for more detail.
+### Configuration Parameters
 
-`enableExtract`: Set to true when you want to extract files from game.
+- **loglevel**: Controls diagnostic output verbosity:
+  - `0`: No output
+  - `1`: Standard logging
+  - `2`: Detailed logging
 
-`outputDirectory`: Path that you want to put the extracted files into.
+- **enableExtract**: Enables file extraction when set to `true`.
 
-`rules`: Uses regular expression to filter the files. Add/remove as you intended.
+- **outputDirectory**: Specifies the target directory for extracted files (use absolute paths).
 
-`includeExtensions`,`excludeExtensions`: Filter the file type that you want to extract. Exclusive.
+- **rules**: Array of regular expressions for file filtering. Modify according to your requirements.
 
-`decryptSimpleCrypt`: Try to decrypt the text file encrypted with `SimpleCrypt`.
+- **includeExtensions/excludeExtensions**: Filters files by extension (mutually exclusive). Empty arrays indicate no filtering.
 
-## How to start
+- **decryptSimpleCrypt**: When enabled (`true`), attempts to decrypt text files protected with `SimpleCrypt` encryption.
 
-If your config file is ready, put `KrkrDump.dll` and `KrkrDump.json` and `KrkrDumpLoader.exe` in the same folder, then drag `Game.exe` to `KrkrDumpLoader.exe`
+## Installation and Execution
+
+1. Prepare the configuration file as shown above.
+2. Place the following files in the same directory:
+   - `KrkrDump.dll`
+   - `KrkrDump.json`
+   - `KrkrDumpLoader.exe`
+3. Launch the tool by dragging the game executable (`Game.exe`) onto `KrkrDumpLoader.exe`.
