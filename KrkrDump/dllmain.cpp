@@ -13,6 +13,7 @@
 #include <regex>
 #include <vector>
 #include <unordered_set>
+#include <unordered_map>
 #include <shlobj.h>
 
 #pragma warning ( push )
@@ -39,6 +40,7 @@ static bool g_tvpStubInitialized = false;
 #define FIND_EXPORTER
 #define DUMP_HASH
 #define DUMP_HXKEY
+#define DUMP_DIR
 #define PATCH_SBEAM
 #define PATCH_SIGNATURECHECK
 
@@ -63,7 +65,7 @@ void UnInlineHook(T& OriginalFunction, T DetourFunction)
 }
 
 
-#ifdef DUMP_HASH
+#if defined DUMP_DIR || defined DUMP_HASH
 
 
 #define PATHHASHSIG "\x55\x8B\xEC\x83\xEC\x50\xFF\x71\x08\xC7\x45\x2A\x2A\x2A\x2A\x2A\xFF\x71\x04\x8D\x4D\xB0"
@@ -104,9 +106,36 @@ void PrintHexString(wchar_t* _Buf, size_t _BufSize, const void* _Data, size_t _S
 }
 
 
+void PrintHexString(char* _Buf, size_t _BufSize, const void* _Data, size_t _Size)
+{
+	auto _Ptr = _Buf;
+	auto _End = _Buf + _BufSize;
+	auto _In = (byte*)_Data;
+
+	if (!_Buf || !_BufSize || !_Data || !_Size)
+		return;
+
+	for (size_t i = 0; i < _Size; i++)
+	{
+		if (_Ptr + 3 > _End)
+			break;
+		sprintf(_Ptr, "%02X", _In[i]);
+		_Ptr += 2;
+	}
+}
+
+
 std::unordered_set<std::wstring> g_pathHashSet;
 std::unordered_set<std::wstring> g_nameHashSet;
 
+#ifdef DUMP_DIR
+
+static bool g_enableDumpDir = false;
+
+std::unordered_map<std::string, std::wstring> g_dirHashMap;
+std::unordered_map<std::wstring, std::string> g_nameHashMap;
+
+#endif
 
 class Hasher
 {
@@ -121,16 +150,29 @@ public:
 
 			if (octet)
 			{
-				wchar_t buffer[80] {};
-				
-				PrintHexString(buffer, _countof(buffer), octet->GetData(), octet->GetLength());
-
-				auto ret = g_pathHashSet.insert(buffer);
-
-				if (ret.second)
+#ifdef DUMP_HASH
+				if (g_enableDumpHash)
 				{
-					g_logger.WriteLine(L"PathHash: \"%s\" \"%s\" \"%s\"", input->c_str(), salt->c_str(), buffer);
+					wchar_t buffer[80]{};
+
+					PrintHexString(buffer, _countof(buffer), octet->GetData(), octet->GetLength());
+
+					auto ret = g_pathHashSet.insert(buffer);
+
+					if (ret.second)
+					{
+						g_logger.WriteLine(L"PathHash: \"%s\" \"%s\" \"%s\"", input->c_str(), salt->c_str(), buffer);
+					}
 				}
+#endif
+#ifdef DUMP_DIR
+				if (g_enableDumpDir)
+				{
+					char hashString[80]{};
+					PrintHexString(hashString, _countof(hashString), octet->GetData(), octet->GetLength());
+					g_dirHashMap.emplace(hashString, input->c_str());
+				}
+#endif
 			}
 		}
 
@@ -147,16 +189,29 @@ public:
 
 			if (octet)
 			{
-				wchar_t buffer[80] {};
-
-				PrintHexString(buffer, _countof(buffer), octet->GetData(), octet->GetLength());
-
-				auto ret = g_nameHashSet.insert(buffer);
-
-				if (ret.second)
+#ifdef DUMP_HASH
+				if (g_enableDumpHash)
 				{
-					g_logger.WriteLine(L"NameHash: \"%s\" \"%s\" \"%s\"", input->c_str(), salt->c_str(), buffer);
+					wchar_t buffer[80]{};
+
+					PrintHexString(buffer, _countof(buffer), octet->GetData(), octet->GetLength());
+
+					auto ret = g_nameHashSet.insert(buffer);
+
+					if (ret.second)
+					{
+						g_logger.WriteLine(L"NameHash: \"%s\" \"%s\" \"%s\"", input->c_str(), salt->c_str(), buffer);
+					}
 				}
+#endif
+#ifdef DUMP_DIR
+				if (g_enableDumpDir)
+				{
+					char hashString[80]{};
+					PrintHexString(hashString, _countof(hashString), octet->GetData(), octet->GetLength());
+					g_nameHashMap.emplace(input->c_str(), hashString);
+				}
+#endif
 			}
 		}
 
@@ -191,7 +246,224 @@ void HookHash(HMODULE hModule)
 #endif
 
 
-#ifdef DUMP_HXKEY
+#ifdef DUMP_DIR
+
+
+static bool IsArrayObject(iTJSDispatch2* obj)
+{
+	if (obj)
+	{
+		tTJSVariant val;
+
+		if (TJS_SUCCEEDED(obj->ClassInstanceInfo(TJS_CII_GET, 0, &val)))
+		{
+			tTJSString classname = val;
+
+			if (classname == L"Array")
+			{
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+
+static tjs_int64 GetArrayLength(iTJSDispatch2* obj)
+{
+	tTJSVariant count;
+
+	if (TJS_FAILED(obj->PropGet(TJS_MEMBERMUSTEXIST, L"count", NULL, &count, obj)))
+		return 0;
+
+	if (count.Type() != tvtInteger)
+		return 0;
+
+	return count.AsInteger();
+}
+
+
+struct EntryInfo
+{
+	size_t ArcId;
+	std::string DirHash;
+};
+
+static std::vector<std::wstring> g_archiveNames;
+static std::unordered_map<std::string, EntryInfo> g_entryDirMap;
+
+
+static void LoadArchiveIndex(tTJSString* path, tTJSVariant* index)
+{
+	if (index->Type() != tvtObject)
+		return;
+
+	iTJSDispatch2* dirArrayObj = index->AsObjectNoAddRef();
+
+	if (!IsArrayObject(dirArrayObj))
+		return;
+
+	tjs_int64 dirArrayLength = GetArrayLength(dirArrayObj);
+
+	if (dirArrayLength & 1)
+		return;
+
+	std::wstring archive{ path->c_str() };
+	std::transform(archive.begin(), archive.end(), archive.begin(), [](wchar_t c) { return c == L'/' ? L'\\' : c; });
+	archive = Path::GetFileNameWithoutExtension(archive);
+
+	size_t arcId = g_archiveNames.size();
+	g_archiveNames.push_back(archive);
+
+	for (tjs_int64 i = 0; i < dirArrayLength; i += 2)
+	{
+		tTJSVariant dirHashV;
+
+		if (TJS_FAILED(dirArrayObj->PropGetByNum(TJS_MEMBERMUSTEXIST, (tjs_int)i, &dirHashV, dirArrayObj)))
+			return;
+
+		if (dirHashV.Type() != tvtOctet)
+			return;
+
+		tTJSVariantOctet* dirHashOctet = dirHashV.AsOctetNoAddRef();
+		const tjs_uint8* dirHashData = dirHashOctet->GetData();
+		tjs_uint dirHashLength = dirHashOctet->GetLength();
+
+		if (!dirHashData || dirHashLength != 8)
+			return;
+
+		char dirHashBuffer[20];
+		memset(dirHashBuffer, 0, sizeof(dirHashBuffer));
+		PrintHexString(dirHashBuffer, _countof(dirHashBuffer), dirHashData, dirHashLength);
+
+		tTJSVariant entryArrayV;
+
+		if (TJS_FAILED(dirArrayObj->PropGetByNum(TJS_MEMBERMUSTEXIST, (tjs_int)(i + 1), &entryArrayV, dirArrayObj)))
+			return;
+
+		if (entryArrayV.Type() != tvtObject)
+			return;
+
+		iTJSDispatch2* entryArrayObj = entryArrayV.AsObjectNoAddRef();
+
+		if (!IsArrayObject(entryArrayObj))
+			return;
+
+		tjs_int64 entryArrayLength = GetArrayLength(entryArrayObj);
+
+		if (entryArrayLength & 1)
+			return;
+
+		for (tjs_int64 j = 0; j < entryArrayLength; j += 2)
+		{
+			tTJSVariant nameHashV;
+
+			if (TJS_FAILED(entryArrayObj->PropGetByNum(TJS_MEMBERMUSTEXIST, (tjs_int)j, &nameHashV, entryArrayObj)))
+				return;
+
+			if (nameHashV.Type() != tvtOctet)
+				return;
+
+			tTJSVariantOctet* nameHashOctet = nameHashV.AsOctetNoAddRef();
+
+			const tjs_uint8* nameHashData = nameHashOctet->GetData();
+			tjs_uint nameHashLength = nameHashOctet->GetLength();
+
+			if (!nameHashData || nameHashLength != 32)
+				return;
+
+			char nameHashBuffer[70];
+			memset(nameHashBuffer, 0, sizeof(nameHashBuffer));
+			PrintHexString(nameHashBuffer, _countof(nameHashBuffer), nameHashData, nameHashLength);
+
+			tTJSVariant entryInfoArrayV;
+
+			if (TJS_FAILED(entryArrayObj->PropGetByNum(TJS_MEMBERMUSTEXIST, (tjs_int)(j + 1), &entryInfoArrayV, entryArrayObj)))
+				return;
+
+			if (!IsArrayObject(entryInfoArrayV))
+				return;
+
+			iTJSDispatch2* entryInfoArrayObj = entryInfoArrayV.AsObjectNoAddRef();
+
+			if (GetArrayLength(entryInfoArrayObj) < 2)
+				return;
+
+			tTJSVariant entryId;
+
+			if (TJS_FAILED(entryInfoArrayObj->PropGetByNum(TJS_MEMBERMUSTEXIST, 0, &entryId, entryInfoArrayObj)))
+				return;
+
+			if (entryId.Type() != tvtInteger)
+				return;
+
+			tTJSVariant entryKey;
+
+			if (TJS_FAILED(entryInfoArrayObj->PropGetByNum(TJS_MEMBERMUSTEXIST, 1, &entryKey, entryInfoArrayObj)))
+				return;
+
+			if (entryKey.Type() != tvtInteger)
+				return;
+
+			std::string dirHashString{ dirHashBuffer };
+			std::string nameHashString{ nameHashBuffer };
+
+			g_entryDirMap[nameHashString] = EntryInfo{ arcId, std::move(dirHashString) };
+		}
+	}
+}
+
+
+static bool g_useStorageMedia = false;
+
+void ProcessStream(tTJSBinaryStream* stream, ttstr* name, tjs_uint32 flags);
+
+
+// Signature
+#define KRKRZSTORAGEMEDIAOPEN_SIG "\x55\x8B\xEC\x6A\x2A\x68\x2A\x2A\x2A\x2A\x64\xA1\x2A\x2A\x2A\x2A\x50\x83\xEC\x2A\x56\xA1\x2A\x2A\x2A\x2A\x33\xC5\x50\x8D\x45\x2A\x64\xA3\x2A\x2A\x2A\x2A\xA1\x2A\x2A\x2A\x2A\x85\xC0\x75\x2A\x68\x2A\x2A\x2A\x2A\xE8\x2A\x2A\x2A\x2A\x83\xC4\x2A\xA3\x2A\x2A\x2A\x2A\x8D\x4D\x2A\x51\xFF\xD0\x8B\x75"
+#define KRKRZSTORAGEMEDIAOPEN_SIG_LEN ( sizeof (KRKRZSTORAGEMEDIAOPEN_SIG) - 1 )
+// Prototype
+typedef tTJSBinaryStream* (_cdecl* tStorageMediaOpenProc)(PVOID, tTJSString*, tjs_uint32);
+// Original
+tStorageMediaOpenProc pfnStorageMediaOpen;
+// Hooked
+tTJSBinaryStream* _cdecl StorageMediaOpen(PVOID _this, tTJSString* name, tjs_uint32 flags)
+{
+	tTJSBinaryStream* stream = pfnStorageMediaOpen(_this, name, flags);
+	ProcessStream(stream, name, flags);
+	return stream;
+}
+
+
+void HookStorageMedia(HMODULE hModule)
+{
+	PVOID base = PE::GetModuleBase(hModule);
+	PIMAGE_SECTION_HEADER section = PE::GetSectionHeader(hModule, ".text");
+
+	if (!section)
+	{
+		g_logger.WriteLine(L"Couldn't to find code section.");
+		return;
+	}
+
+	PVOID searchBase = (PVOID)((UINT_PTR)base + section->VirtualAddress);
+	DWORD searchSize = section->Misc.VirtualSize;
+
+	pfnStorageMediaOpen = (tStorageMediaOpenProc)PE::SearchPattern(searchBase, searchSize, KRKRZSTORAGEMEDIAOPEN_SIG, KRKRZSTORAGEMEDIAOPEN_SIG_LEN);
+	if (pfnStorageMediaOpen)
+	{
+		InlineHook(pfnStorageMediaOpen, StorageMediaOpen);
+		g_useStorageMedia = true;
+		g_logger.WriteLine(L"Hook StorageMediaOpen installed.");
+	}
+}
+
+
+#endif
+
+
+#if defined DUMP_DIR || defined DUMP_HXKEY
 
 
 static bool g_enableDumpHxKey = false;
@@ -216,11 +488,11 @@ void PrintIndexKey(PVOID key, PVOID nonce)
 #define PARSEINDEX_SIG "\x55\x8B\xEC\x6A\xFF\x68\x2A\x2A\x2A\x2A\x64\xA1\x00\x00\x00\x00\x50\x83\xEC\x5C\xA1\x2A\x2A\x2A\x2A\x33\xC5\x89\x45\xF0\x53\x56\x57\x50\x8D\x45\xF4\x64\xA3\x00\x00\x00\x00\x89\x4D\xB8\x8B\x45\x0C\x8B\x75\x08\x89\x45\xBC\xC7\x45"
 #define PARSEINDEX_SIG_LEN ( sizeof(PARSEINDEX_SIG) - 1 )
 // Prototype
-using pfnParseIndex_t = PVOID(_fastcall*)(PVOID, PVOID, PVOID, PVOID);
+using pfnParseIndex_t = tTJSVariant * (_fastcall*)(PVOID, PVOID, PVOID, PVOID);
 // Original
 pfnParseIndex_t pfnParseIndex;
 // Hooked
-PVOID _fastcall HookParseIndex(PVOID a1, PVOID a2, PVOID a3, PVOID a4)
+tTJSVariant* _fastcall HookParseIndex(PVOID a1, PVOID a2, PVOID a3, PVOID a4)
 {
 	auto pathStr = (tTJSString*)a4;
 	auto path = TJSStringGetPtr(pathStr);
@@ -230,7 +502,26 @@ PVOID _fastcall HookParseIndex(PVOID a1, PVOID a2, PVOID a3, PVOID a4)
 
 	g_logger.WriteLine(L"Parsing archive: %s", name);
 
-	return pfnParseIndex(a1, a2, a3, a4);
+	auto index = pfnParseIndex(a1, a2, a3, a4);
+
+#ifdef DUMP_DIR
+	if (g_enableDumpDir)
+	{
+		if (index)
+		{
+			try
+			{
+				LoadArchiveIndex(pathStr, index);
+			}
+			catch (...)
+			{
+				g_logger.WriteLine(L"ERROR: Failed to load archive index.");
+			}
+		}
+	}
+#endif
+
+	return index;
 }
 
 
@@ -363,23 +654,28 @@ void HookHxKey(HMODULE hModule)
 		g_logger.WriteLine(L"Hook PraseIndex installed.");
 	}
 
-	pfnDecIndex = PE::SearchPattern(searchBase, searchSize, DECINDEX_SIG, DECINDEX_SIG_LEN);
-	if (pfnDecIndex)
+#ifdef DUMP_HXKEY
+	if (g_enableDumpHxKey)
 	{
-		DetourUpdateThread(GetCurrentThread());
-		DetourTransactionBegin();
-		DetourAttach(&pfnDecIndex, HookDecIndex);
-		DetourTransactionCommit();
+		pfnDecIndex = PE::SearchPattern(searchBase, searchSize, DECINDEX_SIG, DECINDEX_SIG_LEN);
+		if (pfnDecIndex)
+		{
+			DetourUpdateThread(GetCurrentThread());
+			DetourTransactionBegin();
+			DetourAttach(&pfnDecIndex, HookDecIndex);
+			DetourTransactionCommit();
 
-		g_logger.WriteLine(L"Hook DecIndex installed.");
-	}
+			g_logger.WriteLine(L"Hook DecIndex installed.");
+		}
 
-	pfnCreateFilter = (pfnCreateFilter_t)PE::SearchPattern(searchBase, searchSize, CREATEFILTER_SIG, CREATEFILTER_SIG_LEN);
-	if (pfnCreateFilter)
-	{
-		InlineHook(pfnCreateFilter, HookCreateFilter);
-		g_logger.WriteLine(L"Hook CreateFilter installed.");
+		pfnCreateFilter = (pfnCreateFilter_t)PE::SearchPattern(searchBase, searchSize, CREATEFILTER_SIG, CREATEFILTER_SIG_LEN);
+		if (pfnCreateFilter)
+		{
+			InlineHook(pfnCreateFilter, HookCreateFilter);
+			g_logger.WriteLine(L"Hook CreateFilter installed.");
+		}
 	}
+#endif
 }
 
 
@@ -534,29 +830,33 @@ FARPROC WINAPI HookGetProcAddress(HMODULE hModule, LPCSTR lpProcName)
 
 					g_logger.WriteLine(L"Hook V2Link installed");
 
+					if (path.find(L"\x6B\x72\x6B\x72\x5F") != std::string::npos)
+					{
 #ifdef PATCH_SIGNATURECHECK
-					if (g_enableSignatureCheckPatch)
-					{
-						PatchSignatureCheck(hModule);
-					}
+						if (g_enableSignatureCheckPatch)
+						{
+							PatchSignatureCheck(hModule);
+						}
 #endif
-
-#ifdef DUMP_HASH
-					if (g_enableDumpHash)
-					{
-						HookHash(hModule);
-					}
+#if defined DUMP_HASH || defined DUMP_DIR
+						if (g_enableDumpHash || g_enableDumpDir)
+						{
+							HookHash(hModule);
+						}
 #endif
-
-#ifdef DUMP_HXKEY
-					if (g_enableDumpHxKey)
-					{
-						if (path.find(L"\x6B\x72\x6B\x72\x5F") != std::string::npos)
+#if defined DUMP_HXKEY || defined DUMP_DIR
+						if (g_enableDumpHxKey || g_enableDumpDir)
 						{
 							HookHxKey(hModule);
 						}
-					}
 #endif
+#ifdef DUMP_DIR
+						if (g_enableDumpDir)
+						{
+							HookStorageMedia(hModule);
+						}
+#endif
+					}
 				}
 			}
 		}
@@ -1086,7 +1386,56 @@ void ExtractFile(tTJSBinaryStream* stream, std::wstring& extractPath)
 		extractPath = extractPath.substr(2);
 	}
 
+#ifdef DUMP_DIR
+	std::wstring outputPath = g_outputPath;
+
+	if (g_enableDumpDir && g_useStorageMedia)
+	{
+		bool hasDirPath = false;
+
+		std::wstring name = Path::GetFileName(extractPath);
+
+		auto nameHash = g_nameHashMap.find(name);
+
+		if (nameHash != g_nameHashMap.end())
+		{
+			auto dirHash = g_entryDirMap.find(nameHash->second);
+
+			if (dirHash != g_entryDirMap.end())
+			{
+				auto dirPath = g_dirHashMap.find(dirHash->second.DirHash);
+
+				if (dirPath != g_dirHashMap.end())
+				{
+					outputPath += g_archiveNames[dirHash->second.ArcId];
+					outputPath += L"\\";
+					outputPath += dirPath->second;
+
+					FixPath(outputPath);
+
+					if (outputPath.back() != L'\\')
+					{
+						outputPath += L"\\";
+					}
+
+					outputPath += name;
+					hasDirPath = true;
+				}
+			}
+		}
+
+		if (!hasDirPath)
+		{
+			outputPath += extractPath;
+		}
+	}
+	else
+	{
+		outputPath += extractPath;
+	}
+#else
 	std::wstring outputPath = g_outputPath + extractPath;
+#endif
 
 	// Create output directory
 
@@ -1202,6 +1551,8 @@ tKrkrzMsvcFastCallTVPCreateStreamProc pfnKrkrzMsvcFastCallTVPCreateStreamProc;
 tTJSBinaryStream* _fastcall KrkrzMsvcFastCallTVPCreateStream(ttstr* name, tjs_uint32 flags)
 {
 	tTJSBinaryStream* stream = pfnKrkrzMsvcFastCallTVPCreateStreamProc(name, flags);
+	if (g_useStorageMedia)
+		return stream;
 	ProcessStream(stream, name, flags);
 	return stream;
 }
@@ -1225,6 +1576,8 @@ tTJSBinaryStream* Krkr2BcbFastCallTVPCreateStreamCallback(ttstr* name, tjs_uint3
 tTJSBinaryStream* Krkr2BcbFastCallTVPCreateStream(ttstr* name, tjs_uint32 flags)
 {
 	tTJSBinaryStream* stream = Krkr2BcbFastCallTVPCreateStreamCallback(name, flags);
+	if (g_useStorageMedia)
+		return stream;
 	ProcessStream(stream, name, flags);
 	return stream;
 }
@@ -1448,6 +1801,15 @@ void LoadConfiguration()
 		if (jDumpHxKey)
 		{
 			g_enableDumpHxKey = cJSON_IsTrue(jDumpHxKey);
+		}
+#endif
+
+#ifdef DUMP_DIR
+		cJSON* jDumpDir = cJSON_GetObjectItem(jRoot, "dumpDir");
+
+		if (jDumpDir)
+		{
+			g_enableDumpDir = cJSON_IsTrue(jDumpDir);
 		}
 #endif
 
